@@ -1,6 +1,7 @@
-#Configurations
+# Data Format and Configurations
+User need to prepare training data and training configuration file. Some example configuration files are provided in this folder. The configurable parameters are in the following.
 
-##problem_type
+## problem_type
 The problem type in training phase. Currently support:
 
 **pointwise_ranking**: pointwise ranking via binary classification
@@ -20,30 +21,29 @@ Parameters:
 **neg_num**: Number of negative targets for each query. Default is -1, which is to take all targets except for positive ones
 as negative targets. 
 
-
-##bert\_base
+## bert\_base
 The bert base model to use. Set **base** to use BERT-Base, or **large** to use BERT-Large. 
 
-##do\_lower\_case
+## do\_lower\_case
 Whether to ignore case (**True**) or not (**False**).
 
-##train\_data\_path
+## train\_data\_path
 Training data path
 
-##dev\_data\_path
+## dev\_data\_path
 Dev data path. Best model will be selected based on metric on dev data.
 
-##max\_seq\_length
+## max\_seq\_length
 Max sequence length of BERT input
 
-##n\_fine\_tune\_layers
+## n\_fine\_tune\_layers
 Number of BERT layers to fine-tune. Set 0 to fix all BERT layers, and -1 to fine-tune all BERT layers.
 
-##learning\_rate
+## learning\_rate
 Learning rate for Adam optimizer
 
-##epochs
+## epochs
 Training epochs. The best model is automatically selected.
 
-##batch\_size
+## batch\_size
 Training batch size.

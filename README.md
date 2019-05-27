@@ -5,6 +5,6 @@ Zeal is a machine learning tool to build NLP models for ranking, classification 
 ## How to use
 
 1. Install python packages specified in requirement.txt.
-2. Choose problem type and prepare training data in the format defined in example_conf/README.md
+2. Choose problem type and prepare training data in the format defined in `example_conf/README.md`.
 3. Run `python main.py train --conf example_conf/ranking.conf`. The best model is automatically selected and saved to `./output`.
 4. Run `python logdb.py` to generate model comparison result in `model.csv`. 
