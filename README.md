@@ -1,2 +1,2 @@
 # Zeal
-Zero-effort and Agile Learning
+Zero-effort Agile Learning
