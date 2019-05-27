@@ -12,6 +12,7 @@ from featurizer import BertFeaturizer
 from evaluator import RankingEvaluator
 from tensorflow.keras import optimizers
 from tensorflow.keras import backend as K
+from logdb import LogDB
 
 parser = argparse.ArgumentParser(description='Zero-effort and Agile Learning Tool')
 parser.add_argument("job", type=str, choices=["train", "eval", "predict"],
@@ -33,6 +34,9 @@ def read_conf(conf_path):
              continue
         fields = line.strip().split("\t")
         config[fields[0]] = fields[1]
+    config["train_data_path"] =  os.path.abspath(config["train_data_path"])
+    config["dev_data_path"] =  os.path.abspath(config["dev_data_path"])
+
     return config
 
 def load_training_data(config, log, featurizer):
@@ -111,13 +115,27 @@ def initialize_vars(sess):
     sess.run(tf.tables_initializer())
     K.set_session(sess)
 
+
+class loss_history(tf.keras.callbacks.Callback):
+    def on_train_begin(self, logs={}):
+        self.losses = []
+
+    def on_batch_end(self, batch, logs={}):
+        self.losses.append(float(logs.get('loss')))
+
 if args.job == "train":
     log = {}
-    script_path = os.path.abspath(sys.argv[0])
-    output_path = os.path.join(os.path.dirname(script_path), "output")
+    script_path = os.path.dirname(os.path.abspath(sys.argv[0]))
+    log_db_path = os.path.join(script_path, ".logdb")
+    if not os.path.exists(log_db_path):
+        os.mkdir(log_db_path)
+    logdb = LogDB(log_db_path)
+
+    output_path = os.path.join(script_path, "output")
     if not os.path.exists(output_path):
         os.mkdir(output_path)
-    model_path = os.path.join(output_path, datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+    model_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    model_path = os.path.join(output_path, model_name)
     if not os.path.exists(model_path):
         os.mkdir(model_path)
     log["model_path"] = os.path.abspath(model_path)
@@ -152,41 +170,16 @@ if args.job == "train":
         # Instantiate variables
         initialize_vars(sess)
 
+        history = loss_history()
         model.fit(
             train_data[:3],
             train_data[-1],
-            callbacks=[rankingEvaluator],
-            epochs=config["epochs"],
-            batch_size=config["batch_size"]
+            callbacks=[rankingEvaluator, history],
+            epochs=int(config["epochs"]),
+            batch_size=int(config["batch_size"])
         )
-    print(log)
-
-
-
-
-
-# max_seq_length = 32
-# n_fine_tune_layers = 1
-# with tf.keras.backend.get_session() as sess:
-#     featurizer = create_featurizer(sess, bert_path)
-#     train_input_ids, train_input_masks, train_segment_ids, train_labels = load_training_data("data/rawtrain.tsv",
-#                                                                                              "data/table_columns.json",
-#                                                                                              featurizer,
-#                                                                                              max_seq_length)
-#     # eval_input_ids, eval_input_masks, eval_segment_ids, eval_labels = load_training_data("data/dev.tsv", featurizer, max_seq_length)
-
-#     model = build_model(n_fine_tune_layers, max_seq_length)
-#     model.summary()
-#     # Instantiate variables
-#     initialize_vars(sess)
-#
-#     model.fit(
-#         [train_input_ids, train_input_masks, train_segment_ids],
-#         train_labels,
-#         callbacks=[groupAccEvalCallback],
-#         epochs=10,
-#         batch_size=256
-#     )
+    log["train_loss"] = history.losses
+    logdb.save_log(model_name, config, log)
 
     # tf.saved_model.simple_save(
     #     sess,

@@ -21,29 +21,29 @@ Parameters:
 as negative targets. 
 
 
-##bert_base
+##bert\_base
 The bert base model to use. Set **base** to use BERT-Base, or **large** to use BERT-Large. 
 
-##do_lower_case
+##do\_lower\_case
 Whether to ignore case (**True**) or not (**False**).
 
-##train_data_path
+##train\_data\_path
 Training data path
 
-##dev_data_path
+##dev\_data\_path
 Dev data path. Best model will be selected based on metric on dev data.
 
-##max_seq_length
+##max\_seq\_length
 Max sequence length of BERT input
 
-##n_fine_tune_layers
+##n\_fine\_tune\_layers
 Number of BERT layers to fine-tune. Set 0 to fix all BERT layers, and -1 to fine-tune all BERT layers.
 
-##learning_rate
+##learning\_rate
 Learning rate for Adam optimizer
 
 ##epochs
 Training epochs. The best model is automatically selected.
 
-##batch_size
+##batch\_size
 Training batch size.
