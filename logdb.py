@@ -37,8 +37,9 @@ class LogDB(object):
                 major_record[k] = v
 
             log = record["log"]
-            for k in ["model_path", "train_data_md5", "eval_data_md5"]:
-                major_record[k] = log[k]
+            for k in ["model_path", "train_data_md5", "eval_data_md5", "note"]:
+                if k in log:
+                    major_record[k] = log[k]
             metric = record["log"]["eval_metric"]
             for k, v in metric.items():
                 major_record[k] = v
@@ -60,7 +61,7 @@ class LogDB(object):
             "train_data_md5",
             "eval_data_md5",
             "bert_base",
-            "do_lower_case"] + list(record["log"]["eval_metric"].keys())
+            "do_lower_case"] + list(record["log"]["eval_metric"].keys()) + ["note"]
         cols = key_cols + [c for c in all_keys if c not in key_cols]
         data = data[cols]
         return data
