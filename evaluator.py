@@ -3,13 +3,63 @@ import tensorflow as tf
 import numpy as np
 import hashlib
 
+class ClassificationEvaluator(tf.keras.callbacks.Callback):
+    def __init__(self, config, log, featurizer):
+        super(ClassificationEvaluator, self).__init__()
+        self.log = log
+        self.evalFile = config["dev_data_path"]
+        self.featurizer = featurizer
+        self.id2class = {}
+        for line in open(os.path.join(log["model_path"], "classes.txt")):
+            class_name, id = line.rstrip().split("\t")
+            self.id2class[int(id)] = class_name
+
+        eval_input_ids, eval_input_masks, eval_segment_ids, eval_labels = [], [], [], []
+        eval_data_md5 = hashlib.md5()
+        max_seq_length = int(config["max_seq_length"])
+        for line in open(self.evalFile, encoding="utf8"):
+            eval_data_md5.update(line.encode("utf8"))
+            query, class_name = line.rstrip().split("\t")
+
+            eval_labels.append(class_name)
+            feature = featurizer.featurize(query, None, max_seq_length)
+            eval_input_ids.append(feature["input_ids"])
+            eval_input_masks.append(feature["input_mask"])
+            eval_segment_ids.append(feature["segment_ids"])
+        log["eval_data_md5"] = eval_data_md5.hexdigest()
+        self.eval_samples = [eval_input_ids, eval_input_masks, eval_segment_ids, eval_labels]
+        self.eval_history_file = os.path.join(log["model_path"], "eval.log")
+        self.best_metric = None
+
+
+    def on_epoch_end(self, epochs, logs=None):
+        print()
+        print("Evaluating on " + self.evalFile)
+        labels = self.eval_samples[-1]
+        scores = self.model.predict(self.eval_samples[:3])
+        pred_labels = [self.id2class[i] for i in np.argmax(scores, -1)]
+
+        acc = 1.0
+        for i in range(len(labels)):
+            if labels[i] == pred_labels[i]:
+                acc += 1
+        acc = acc / len(labels)
+        result_str = "Epoch {0}: Accuracy {1:.2f}".format(epochs, acc)
+        print(result_str)
+        with open(self.eval_history_file, "a+", encoding="utf8") as f:
+            f.write(result_str + "\n")
+
+        if self.best_metric == None or self.best_metric < acc:
+            self.best_metric = acc
+            self.log["eval_metric"] = {"best_epoch":epochs, "accuracy": acc}
+            self.model.save(os.path.join(self.log["model_path"], "model.h5"))
+
 class RankingEvaluator(tf.keras.callbacks.Callback):
     def __init__(self, config, log, featurizer):
         super(RankingEvaluator, self).__init__()
         self.log = log
         self.evalFile = config["dev_data_path"]
         self.featurizer = featurizer
-        self.max_sql_length = config["max_seq_length"]
         self.targets = set()
         for line in open(os.path.join(log["model_path"], "targets.txt")):
             self.targets.add(line.rstrip())
@@ -100,6 +150,12 @@ class RankingEvaluator(tf.keras.callbacks.Callback):
             f.write(result_str + "\n")
 
         if self.best_metric == None or self.best_metric["F1"] < result["F1"]:
-            self.best_metric = result
-            self.log["eval_metric"] = result
+            self.best_metric = {k:v for k,v in result.items()}
+            best_eval_metric = {}
+            for k, v in result.items():
+                if k == "epoch":
+                    best_eval_metric["best_epoch"] = v
+                else:
+                    best_eval_metric[k] = v
+            self.log["eval_metric"] = best_eval_metric
             self.model.save(os.path.join(self.log["model_path"], "model.h5"))
