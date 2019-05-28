@@ -13,40 +13,43 @@ class BertTokenizer(object):
         self.unk_token = unk_token
         self.max_input_chars_per_word = max_input_chars_per_word
 
+    def wordpiece_tokenize(self, token):
+        chars = list(token)
+        if len(chars) > self.max_input_chars_per_word:
+            return self.unk_token
+
+        is_bad = False
+        start = 0
+        sub_tokens = []
+        while start < len(chars):
+            end = len(chars)
+            cur_substr = None
+            while start < end:
+                substr = "".join(chars[start:end])
+                if start > 0:
+                    substr = "##" + substr
+                if substr in self.vocab:
+                    cur_substr = substr
+                    break
+                end -= 1
+            if cur_substr is None:
+                is_bad = True
+                break
+            sub_tokens.append(cur_substr)
+            start = end
+
+        if is_bad:
+            return self.unk_token
+        else:
+            return sub_tokens
+
     def tokenize(self, text):
         output_tokens = []
         for token in text.strip().split():
             if self.do_lower_case:
                 token = token.lower()
-            chars = list(token)
-            if len(chars) > self.max_input_chars_per_word:
-                output_tokens.append(self.unk_token)
-                continue
-
-            is_bad = False
-            start = 0
-            sub_tokens = []
-            while start < len(chars):
-                end = len(chars)
-                cur_substr = None
-                while start < end:
-                    substr = "".join(chars[start:end])
-                    if start > 0:
-                        substr = "##" + substr
-                    if substr in self.vocab:
-                        cur_substr = substr
-                        break
-                    end -= 1
-                if cur_substr is None:
-                    is_bad = True
-                    break
-                sub_tokens.append(cur_substr)
-                start = end
-
-            if is_bad:
-                output_tokens.append(self.unk_token)
-            else:
-                output_tokens.extend(sub_tokens)
+            sub_tokens = self.wordpiece_tokenize(token)
+            output_tokens.extend(sub_tokens)
         return output_tokens
 
     def convert_tokens_to_ids(self, tokens):
@@ -143,7 +146,84 @@ class BertFeaturizer(object):
         assert len(segment_ids) == max_seq_length
 
         return {
+            "tokens": tokens,
             "input_ids": input_ids,
             "input_mask": input_mask,
             "segment_ids": segment_ids,
         }
+
+    def featurize_with_tag(self, token_tags, tag2id, max_seq_length):
+        """Featurize input with tagging information"""
+
+        # token_tags: [(token1, tag1), (token2, tag2), ...]
+        # tag2id: dict that transform tag to id.
+
+        tokens, tags = [], []
+        # The tag input mask has 1 for the first subtoken of real tokens and 0 for other subtokens,
+        # padding tokens and [CLS], [SEP].
+        tag_mask = []
+
+        tokens.append("[CLS]")
+        tags.append("[CLS]")
+        tag_mask.append(0)
+
+        for token, tag in token_tags:
+            sub_tokens = self.tokenizer.wordpiece_tokenize(token)
+            tokens.extend(sub_tokens)
+            tags.extend([tag]*len(sub_tokens))
+            tag_mask.extend([1] + [0]*(len(sub_tokens)-1))
+        if len(tokens) > max_seq_length - 1:
+            tokens = tokens[:max_seq_length-1]
+            tags = tags[:max_seq_length-1]
+            tag_mask = tag_mask[:max_seq_length-1]
+
+        tokens.append("[SEP]")
+        tags.append("[SEP]")
+        tag_mask.append(0)
+
+        input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+        tag_ids = [tag2id[tag] if tag in tag2id else 0 for tag in tags]
+
+        # The mask has 1 for real tokens and 0 for padding tokens. Only real
+        # tokens are attended to.
+        input_mask = [1] * len(input_ids)
+        segment_ids = [0] * len(input_ids)
+
+        # Zero-pad up to the sequence length.
+        while len(input_ids) < max_seq_length:
+            input_ids.append(0)
+            input_mask.append(0)
+            segment_ids.append(0)
+            tag_ids.append(0)
+            tag_mask.append(0)
+
+        assert len(input_ids) == max_seq_length
+        assert len(input_mask) == max_seq_length
+        assert len(segment_ids) == max_seq_length
+        assert len(tag_ids) == max_seq_length
+        assert len(tag_mask) == max_seq_length
+
+        return {
+            "tokens": tokens,
+            "tags": tags,
+            "input_ids": input_ids,
+            "input_mask": input_mask,
+            "segment_ids": segment_ids,
+            "tag_ids": tag_ids,
+            "tag_mask": tag_mask
+        }
+
+if __name__ == "__main__":
+    vocab = "output/vocab/baseTrue.txt"
+    featurizer = BertFeaturizer(vocab, True)
+
+    print("===Test [featurize]===")
+    inputs = featurizer.featurize("oppties created last year", "opportunity", 16)
+    for k, v in inputs.items():
+        print(k, v, len(v))
+
+    print("===Test [featurize_with_tag]===")
+    token_tags = list(zip("show|me|oppties|older|than|100|days".split("|"), "O|O|O|DATE|DATE|DATE|DATE".split("|")))
+    inputs = featurizer.featurize_with_tag(token_tags, {"O":1, "DATE":2}, 16)
+    for k, v in inputs.items():
+        print(k, v, len(v))

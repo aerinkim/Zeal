@@ -44,8 +44,8 @@ def load_ranking_data(config, log, featurizer):
     train_data_path = config["train_data_path"]
     max_seq_length = int(config["max_seq_length"])
     tgt_sep = "|"
-    if "tgt_sep" in config:
-        tgt_sep = config["tgt_sep"]
+    if "sep" in config:
+        tgt_sep = config["sep"]
 
     neg_num = -1
     if "neg_num" in config:
@@ -56,9 +56,6 @@ def load_ranking_data(config, log, featurizer):
     for line in open(train_data_path, encoding="utf8"):
         _, pos_tgts = line.rstrip().split("\t")
         targets |= set(pos_tgts.split(tgt_sep))
-    with open(os.path.join(model_path, "targets.txt"), "w", encoding="utf8") as f:
-        for target in targets:
-            f.write(target + "\n")
 
     train_input_ids, train_input_masks, train_segment_ids, train_labels = [], [], [], []
     train_data_md5 = hashlib.md5()
@@ -90,5 +87,52 @@ def load_ranking_data(config, log, featurizer):
 
     #Get md5 for training file
     log["train_data_md5"] = train_data_md5.hexdigest()
+    with open(os.path.join(model_path, "targets.txt"), "w", encoding="utf8") as f:
+        for target in targets:
+            f.write(target + "\n")
 
     return train_input_ids, train_input_masks, train_segment_ids, train_labels
+
+def load_tagging_data(config, log, featurizer):
+    model_path = log["model_path"]
+    train_data_path = config["train_data_path"]
+    max_seq_length = int(config["max_seq_length"])
+    sep = "|"
+    if "sep" in config:
+        sep = config["sep"]
+
+    #Get all tags
+    tags = set()
+    for line in open(train_data_path, encoding="utf8"):
+        _, cur_tags = line.rstrip().split("\t")
+        tags |= set(cur_tags.split(sep))
+    tag2id = {tag: i for i, tag in enumerate(tags)}
+
+    train_input_ids, train_input_masks, train_segment_ids = [], [], []
+    train_tag_ids, train_tag_mask = [], []
+
+    train_data_md5 = hashlib.md5()
+    cnt = 0
+    for line in open(train_data_path, encoding="utf8"):
+        train_data_md5.update(line.encode("utf8"))
+        query, tags = line.rstrip().split("\t")
+        token_tags = list(zip(query.split(sep), tags.split(sep)))
+        feature = featurizer.featurize_with_tag(token_tags, tag2id, max_seq_length)
+
+        train_input_ids.append(feature["input_ids"])
+        train_input_masks.append(feature["input_mask"])
+        train_segment_ids.append(feature["segment_ids"])
+        train_tag_ids.append(feature["tag_ids"])
+        train_tag_mask.append(feature["tag_mask"])
+        cnt += 1
+        if cnt > 0 and cnt % 1000 == 0:
+            print("{0} training samples processed".format(cnt))
+
+    #Get md5 for training file
+    log["train_data_md5"] = train_data_md5.hexdigest()
+    with open(os.path.join(model_path, "tags.txt"), "w", encoding="utf8") as f:
+        for tag in tag2id:
+            f.write(tag + "\t" + str(tag2id[tag]) + "\n")
+    config["tag_num"] = len(tag2id)
+
+    return train_input_ids, train_input_masks, train_segment_ids, train_tag_ids, train_tag_mask

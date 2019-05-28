@@ -28,6 +28,7 @@ class LogDB(object):
         """Extract major information from logs"""
 
         all_keys = set()
+        metric_keys = set()
         major_records = []
         for record in self.records:
             major_record = {}
@@ -43,6 +44,8 @@ class LogDB(object):
             metric = record["log"]["eval_metric"]
             for k, v in metric.items():
                 major_record[k] = v
+                metric_keys.add(k)
+
             major_records.append(major_record)
             all_keys = all_keys.union(major_record.keys())
 
@@ -61,7 +64,7 @@ class LogDB(object):
             "train_data_md5",
             "eval_data_md5",
             "bert_base",
-            "do_lower_case"] + list(record["log"]["eval_metric"].keys()) + ["note"]
+            "do_lower_case"] + list(metric_keys) + ["note"]
         cols = key_cols + [c for c in all_keys if c not in key_cols]
         data = data[cols]
         return data

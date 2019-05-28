@@ -44,7 +44,7 @@ class ClassificationEvaluator(tf.keras.callbacks.Callback):
             if labels[i] == pred_labels[i]:
                 acc += 1
         acc = acc / len(labels)
-        result_str = "Epoch {0}: Accuracy {1:.2f}".format(epochs, acc)
+        result_str = "Epoch {0}: Accuracy={1:.2f}".format(epochs, acc)
         print(result_str)
         with open(self.eval_history_file, "a+", encoding="utf8") as f:
             f.write(result_str + "\n")
@@ -65,8 +65,8 @@ class RankingEvaluator(tf.keras.callbacks.Callback):
             self.targets.add(line.rstrip())
 
         tgt_sep = "|"
-        if "tgt_sep" in config:
-            tgt_sep = config["tgt_sep"]
+        if "sep" in config:
+            tgt_sep = config["sep"]
 
         self.eval_samples = []
         eval_data_md5 = hashlib.md5()
@@ -158,4 +158,79 @@ class RankingEvaluator(tf.keras.callbacks.Callback):
                 else:
                     best_eval_metric[k] = v
             self.log["eval_metric"] = best_eval_metric
+            self.model.save(os.path.join(self.log["model_path"], "model.h5"))
+
+class SequenceTagEvaluator(tf.keras.callbacks.Callback):
+    def __init__(self, config, log, featurizer):
+        super(SequenceTagEvaluator, self).__init__()
+        self.log = log
+        self.evalFile = config["dev_data_path"]
+        self.featurizer = featurizer
+        sep = "|"
+        if "sep" in config:
+            sep = config["sep"]
+
+        self.id2tag = {}
+        tag2id = {}
+        for line in open(os.path.join(log["model_path"], "tags.txt")):
+            tag, id = line.rstrip().split("\t")
+            self.id2tag[int(id)] = tag
+            tag2id[tag] = int(id)
+
+        eval_input_ids, eval_input_masks, eval_segment_ids = [], [], []
+        eval_tag_ids, eval_tag_mask = [], []
+
+        eval_data_md5 = hashlib.md5()
+        max_seq_length = int(config["max_seq_length"])
+        for line in open(self.evalFile, encoding="utf8"):
+            eval_data_md5.update(line.encode("utf8"))
+            query, tags = line.rstrip().split("\t")
+            token_tags = list(zip(query.split(sep), tags.split(sep)))
+            feature = featurizer.featurize_with_tag(token_tags, tag2id, max_seq_length)
+
+            eval_input_ids.append(feature["input_ids"])
+            eval_input_masks.append(feature["input_mask"])
+            eval_segment_ids.append(feature["segment_ids"])
+            eval_tag_ids.append(feature["tag_ids"])
+            eval_tag_mask.append(feature["tag_mask"])
+
+        log["eval_data_md5"] = eval_data_md5.hexdigest()
+        self.eval_samples = [eval_input_ids, eval_input_masks, eval_segment_ids, eval_tag_ids, eval_tag_mask]
+        self.eval_history_file = os.path.join(log["model_path"], "eval.log")
+        self.best_metric = None
+
+    def on_epoch_end(self, epochs, logs=None):
+        print()
+        print("Evaluating on " + self.evalFile)
+        eval_tag_ids, eval_tag_mask = self.eval_samples[3], self.eval_samples[4]
+        scores = self.model.predict(self.eval_samples[:3])
+        max_ids = np.argmax(scores, -1)
+
+        sentence_acc, pos_acc, pos_cnt = 0.0, 0.0, 0.0
+        for i in range(max_ids.shape[0]):
+            cur_sentence_acc = 0.0
+            cur_sentence_pos_cnt = 0.0
+            for j in range(max_ids.shape[1]):
+                if eval_tag_mask[i][j] == 1:
+                    pos_cnt += 1
+                    cur_sentence_pos_cnt += 1
+                    if max_ids[i, j] == eval_tag_ids[i][j]:
+                        pos_acc += 1
+                        cur_sentence_acc += 1
+            cur_sentence_acc = cur_sentence_acc / cur_sentence_pos_cnt
+            sentence_acc += cur_sentence_acc
+
+        result = {
+            "sentence_acc" : sentence_acc / max_ids.shape[0],
+            "accuracy" : pos_acc / pos_cnt
+        }
+
+        result_str = "Epoch {0}: Sentence accuracy {1:.2f}, token accuracy {2:.2f}".format(epochs, result["sentence_acc"], result["accuracy"])
+        print(result_str)
+        with open(self.eval_history_file, "a+", encoding="utf8") as f:
+            f.write(result_str + "\n")
+
+        if self.best_metric == None or self.best_metric["accuracy"] < result["accuracy"]:
+            self.best_metric = {k: v for k, v in result.items()}
+            self.log["eval_metric"] = {"best_epoch":epochs, "accuracy": result["accuracy"], "sentence_acc": result["sentence_acc"]}
             self.model.save(os.path.join(self.log["model_path"], "model.h5"))

@@ -17,7 +17,7 @@ from tensorflow.keras.utils import to_categorical
 
 from logdb import LogDB
 
-parser = argparse.ArgumentParser(description='Zero-effort and Agile Learning Tool')
+parser = argparse.ArgumentParser(description='Zero-effort Automatic Learning Tool')
 parser.add_argument("job", type=str, choices=["train", "eval", "predict"],
                     help="job can be train, eval or predict")
 parser.add_argument("--conf", help="conf file path")
@@ -54,11 +54,15 @@ def build_model(config, log):
     in_segment = tf.keras.layers.Input(shape=(max_seq_length,), name="segment_ids", dtype=tf.int32)
     bert_inputs = [in_id, in_mask, in_segment]
 
-    bert_output = layer.BertLayer(bert_path, n_fine_tune_layers)(bert_inputs)
     if config["problem_type"] == "point_wise_ranking":
+        bert_output = layer.BertLayer(bert_path, n_fine_tune_layers)(bert_inputs)
         pred = tf.keras.layers.Dense(1, activation='sigmoid')(bert_output)
     elif config["problem_type"] == "classification":
+        bert_output = layer.BertLayer(bert_path, n_fine_tune_layers)(bert_inputs)
         pred = tf.keras.layers.Dense(config["class_num"], activation='softmax')(bert_output)
+    elif config["problem_type"] == "sequence_tag":
+        bert_output = layer.BertLayer(bert_path, n_fine_tune_layers)(bert_inputs, return_sequence=True)
+        pred = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(config["tag_num"], activation='softmax'))(bert_output)
     else:
         raise Exception("No model is supported for the problem_type {0}".format(config["problem_type"]))
 
@@ -102,6 +106,8 @@ if args.job == "train":
         os.mkdir(vocab_path)
 
     conf_path = os.path.abspath(args.conf)
+    shutil.copyfile(conf_path, os.path.join(model_path, "model.conf"))
+
     config = read_conf(conf_path)
     bert_base = config["bert_base"]
     do_lower_case = True if config["do_lower_case"] == "True" else False
@@ -141,7 +147,7 @@ if args.job == "train":
             train_data = data_processor.load_classification_data(config, log, featurizer)
             classificationEvaluator = evaluator.ClassificationEvaluator(config, log, featurizer)
             model = build_model(config, log)
-            model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+            model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=["accuracy"])
             model.summary()
             # Instantiate variables
             initialize_vars(sess)
@@ -150,6 +156,30 @@ if args.job == "train":
                 train_data[:3],
                 to_categorical(train_data[-1], config["class_num"]),
                 callbacks=[classificationEvaluator, history],
+                epochs=int(config["epochs"]),
+                batch_size=int(config["batch_size"])
+            )
+        elif config["problem_type"] == "sequence_tag":
+            train_data = data_processor.load_tagging_data(config, log, featurizer)
+            sequenceTagEvaluator = evaluator.SequenceTagEvaluator(config, log, featurizer)
+            model = build_model(config, log)
+            model.compile(
+                loss="categorical_crossentropy",
+                optimizer=optimizer,
+                metrics=["accuracy"],
+                sample_weight_mode="temporal"
+            )
+            model.summary()
+            # Instantiate variables
+            initialize_vars(sess)
+
+            target = np.array([to_categorical(x, config["tag_num"]) for x in train_data[3]])
+            sample_weight = np.array(train_data[4])
+            model.fit(
+                train_data[:3],
+                target,
+                sample_weight = sample_weight,
+                callbacks=[sequenceTagEvaluator, history],
                 epochs=int(config["epochs"]),
                 batch_size=int(config["batch_size"])
             )

@@ -1,18 +1,18 @@
 # Configurations
-Some example configuration files are provided in this folder. The configurable parameters are listed below:
+Some configuration file examples are provided in this folder. The configurable parameters are listed below:
 
 ## problem_type
 The problem type in training phase. Currently support:
 
 1. `pointwise_ranking`: pointwise ranking via binary classification.
 2. `classification`: multi-class classifcation.
+3. `sequence_tag`: sequence tagging.
 
-
-## tgt\_sep (ranking problem only)
-Separator to use when splitting the targets in training and dev data. Default is "|".
+## sep (ranking and sequence tagging problem only)
+Separator to use when splitting the targets in ranking problem, and query and tagging labels in sequence tagging problem. Default is `|`.
 
 ## neg\_num (ranking problem only)
-Number of negative targets for each query in training data. Default is -1, which is to take all targets except for positive ones as negative targets. 
+Number of negative targets for each query in training data. Default is `-1`, which is to take all targets except for positive ones as negative targets. 
 
 ## bert\_base
 The bert base model to use. Set `base` to use BERT-Base, or `large` to use BERT-Large. 

@@ -10,7 +10,7 @@ Dev data format:
 
 **query**[tab]**pos\_target1**|**pos\_target1**|...[tab]**neg\_target1**|**neg\_target2**|...
 
-Parameters: `pos_sep`, `neg_num`. See `README.md` under `example_conf`.
+Parameters: `sep`, `neg_num`. See `README.md` under `example_conf`.
 
 ## Classification:
 
