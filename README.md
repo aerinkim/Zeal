@@ -1,6 +1,6 @@
 # Zeal: Zero-Effort Automatic Learning
 
-Zeal is a machine learning tool to build NLP models for ranking, classification and sequence tagging problems. The goal of Zeal is to train NLP model with zero effort (user still need to prepare training and evaluation data in the given format), and achieve decent performance. Zeal also manages models and training results in a database, and user can easily compare parameters and metrics of previous trained models.
+Zeal is a machine learning tool to build NLP models for ranking, classification and sequence tagging problems. The goal of Zeal is to train NLP model with zero effort but still achieve decent performance. It also provides result logging database for comparing parameters and metrics of previous trained models.
 
 ## How to use
 

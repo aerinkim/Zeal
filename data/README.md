@@ -18,4 +18,12 @@ Training and dev data format:
 
 **query**[tab]**class\_label**
 
-``class_label`` can be text, in which case Zeal will automatically convert text label to id and record the mapping in `output/classes.txt`.
+Zeal will automatically convert ``class_label`` to id and record the mapping in `output/classes.txt`.
+
+## Sequence Tagging:
+
+Training and dev data format:
+
+**token1**|**token1**|...[tab]**token1\_tag**|**token2\_tag**...
+
+Zeal will automatically convert token tags to id and record the mapping in `output/tags.txt`.
