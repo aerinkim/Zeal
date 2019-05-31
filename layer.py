@@ -10,6 +10,12 @@ class BertLayer(tf.layers.Layer):
         self.output_size = 768 if "768" in bert_path else 1024
         super(BertLayer, self).__init__(**kwargs)
 
+    def get_config(self):
+        config = super(BertLayer, self).get_config()
+        config["n_fine_tune_layers"] = self.n_fine_tune_layers
+        config["bert_path"] = self.bert_path
+        return config
+
     def build(self, input_shape):
         self.bert = hub.Module(
             self.bert_path,

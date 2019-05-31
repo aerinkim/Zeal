@@ -18,10 +18,11 @@ from tensorflow.keras.utils import to_categorical
 from logdb import LogDB
 
 parser = argparse.ArgumentParser(description='Zero-effort Automatic Learning Tool')
-parser.add_argument("job", type=str, choices=["train", "eval", "predict"],
-                    help="job can be train, eval or predict")
+parser.add_argument("job", type=str, choices=["train", "eval", "predict", "export"],
+                    help="job can be train, eval, predict or export")
 parser.add_argument("--conf", help="conf file path")
 parser.add_argument("--note", help="notes on data and model settings")
+parser.add_argument("--model_path", help="trained model folder path (used in eval, predict and export mode)")
 
 args = parser.parse_args()
 
@@ -64,7 +65,7 @@ def build_model(config, log):
         bert_output = layer.BertLayer(bert_path, n_fine_tune_layers)(bert_inputs, return_sequence=True)
         pred = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(config["tag_num"], activation='softmax'))(bert_output)
     else:
-        raise Exception("No model is supported for the problem_type {0}".format(config["problem_type"]))
+        raise Exception("No model is supported for problem_type {0}".format(config["problem_type"]))
 
     model = tf.keras.models.Model(inputs=bert_inputs, outputs=pred)
     return model
@@ -126,11 +127,11 @@ if args.job == "train":
         featurizer = BertFeaturizer(vocab_file, do_lower_case)
         optimizer = optimizers.Adam(float(config["learning_rate"]))
         history = loss_history()
+        model = build_model(config, log)
 
         if config["problem_type"] == "point_wise_ranking":
             train_data = data_processor.load_ranking_data(config, log, featurizer)
             rankingEvaluator = evaluator.RankingEvaluator(config, log, featurizer)
-            model = build_model(config, log)
             model.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
             model.summary()
             # Instantiate variables
@@ -146,7 +147,6 @@ if args.job == "train":
         elif config["problem_type"] == "classification":
             train_data = data_processor.load_classification_data(config, log, featurizer)
             classificationEvaluator = evaluator.ClassificationEvaluator(config, log, featurizer)
-            model = build_model(config, log)
             model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=["accuracy"])
             model.summary()
             # Instantiate variables
@@ -162,7 +162,6 @@ if args.job == "train":
         elif config["problem_type"] == "sequence_tag":
             train_data = data_processor.load_tagging_data(config, log, featurizer)
             sequenceTagEvaluator = evaluator.SequenceTagEvaluator(config, log, featurizer)
-            model = build_model(config, log)
             model.compile(
                 loss="categorical_crossentropy",
                 optimizer=optimizer,
@@ -185,13 +184,25 @@ if args.job == "train":
             )
         else:
             raise Exception("problem_type is not recognized")
+        print("Best model has been saved to {0}".format(os.path.abspath(log["model_path"])))
+
     log["train_loss"] = history.losses
     logdb.save_log(model_name, config, log)
-    print("Best model has been saved to {0}".format(os.path.abspath(log["model_path"])))
 
-    # tf.saved_model.simple_save(
-    #     sess,
-    #     export_path,
-    #     inputs={'input_image': model.input},
-    #
-    #     outputs={t.name: t for t in model.outputs})
+elif args.job == "export":
+    if args.model_path is None:
+        raise Exception("Please specify model path")
+
+    tf.keras.backend.set_learning_phase(0)  # Ignore dropout at inference
+    model = tf.keras.models.load_model(os.path.join(args.model_path, "model.h5"), custom_objects={'BertLayer': layer.BertLayer})
+    export_path = os.path.join(args.model_path, "serve")
+    with tf.keras.backend.get_session() as sess:
+        tf.saved_model.simple_save(
+            sess,
+            export_path,
+            inputs={t.name: t for t in model.input},
+            outputs={t.name: t for t in model.outputs})
+    print("Servable model has been exported to {0}".format(os.path.abspath(export_path)))
+
+else:
+    raise Exception("Job type {0} is not supported for now".format(args.job))
