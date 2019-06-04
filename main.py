@@ -51,7 +51,7 @@ def build_model(config, log):
     max_seq_length = int(config["max_seq_length"])
 
     in_id = tf.keras.layers.Input(shape=(max_seq_length,), name="input_ids", dtype=tf.int32)
-    in_mask = tf.keras.layers.Input(shape=(max_seq_length,), name="input_masks", dtype=tf.int32)
+    in_mask = tf.keras.layers.Input(shape=(max_seq_length,), name="input_mask", dtype=tf.int32)
     in_segment = tf.keras.layers.Input(shape=(max_seq_length,), name="segment_ids", dtype=tf.int32)
     bert_inputs = [in_id, in_mask, in_segment]
 
@@ -127,11 +127,12 @@ if args.job == "train":
         featurizer = BertFeaturizer(vocab_file, do_lower_case)
         optimizer = optimizers.Adam(float(config["learning_rate"]))
         history = loss_history()
-        model = build_model(config, log)
 
         if config["problem_type"] == "point_wise_ranking":
             train_data = data_processor.load_ranking_data(config, log, featurizer)
             rankingEvaluator = evaluator.RankingEvaluator(config, log, featurizer)
+
+            model = build_model(config, log)
             model.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
             model.summary()
             # Instantiate variables
@@ -147,6 +148,8 @@ if args.job == "train":
         elif config["problem_type"] == "classification":
             train_data = data_processor.load_classification_data(config, log, featurizer)
             classificationEvaluator = evaluator.ClassificationEvaluator(config, log, featurizer)
+
+            model = build_model(config, log)
             model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=["accuracy"])
             model.summary()
             # Instantiate variables
@@ -162,6 +165,8 @@ if args.job == "train":
         elif config["problem_type"] == "sequence_tag":
             train_data = data_processor.load_tagging_data(config, log, featurizer)
             sequenceTagEvaluator = evaluator.SequenceTagEvaluator(config, log, featurizer)
+
+            model = build_model(config, log)
             model.compile(
                 loss="categorical_crossentropy",
                 optimizer=optimizer,

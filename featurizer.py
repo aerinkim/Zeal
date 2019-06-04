@@ -53,7 +53,7 @@ class BertTokenizer(object):
         return output_tokens
 
     def convert_tokens_to_ids(self, tokens):
-        return [self.vocab[token] for token in tokens]
+        return [self.vocab[token] if token in self.vocab else self.vocab[self.unk_token] for token in tokens]
 
 class BertFeaturizer(object):
     def __init__(self, vocab_file, do_lower_case):
